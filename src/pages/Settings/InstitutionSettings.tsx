@@ -77,6 +77,7 @@ const InstitutionSettings = () => {
         settings: {
           attendanceValidationMethod: institution.settings?.attendanceValidationMethod || "qrcode",
           attendanceWindowMinutes: institution.settings?.attendanceWindowMinutes || 15,
+          defaultTemporaryPassword: institution.settings?.defaultTemporaryPassword || "",
         },
       });
     }
@@ -117,6 +118,7 @@ const InstitutionSettings = () => {
         .update({
           attendance_validation_method: data.settings.attendanceValidationMethod || 'qrcode',
           attendance_window_minutes: data.settings.attendanceWindowMinutes || 15,
+          default_temporary_password: data.settings.defaultTemporaryPassword,
         })
         .eq('institution_id', data.id);
         
@@ -500,6 +502,39 @@ const InstitutionSettings = () => {
             />
             <p className="text-sm text-muted-foreground">
               Tempo de tolerância para o aluno confirmar presença após o início da aula.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Configurações de Usuários</CardTitle>
+          <CardDescription>
+            Configure as opções relacionadas aos usuários
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="defaultPassword">Senha Temporária Padrão</Label>
+            <Input
+              id="defaultPassword"
+              type="text"
+              value={institutionData.settings.defaultTemporaryPassword || ''}
+              onChange={(e) =>
+                setInstitutionData({
+                  ...institutionData,
+                  settings: {
+                    ...institutionData.settings,
+                    defaultTemporaryPassword: e.target.value,
+                  },
+                })
+              }
+              placeholder="Digite a senha temporária padrão"
+            />
+            <p className="text-sm text-muted-foreground">
+              Esta senha será usada como padrão para todos os novos usuários criados.
+              Eles poderão alterá-la no primeiro acesso.
             </p>
           </div>
         </CardContent>

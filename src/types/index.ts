@@ -1,4 +1,3 @@
-
 export interface User {
   id: string;
   name: string;
@@ -7,6 +6,7 @@ export interface User {
   avatar?: string;
   active: boolean;
   institutionId?: string;
+  isFirstAccess?: boolean;
 }
 
 export type UserRole = "admin" | "coordinator" | "teacher" | "student";
@@ -23,8 +23,9 @@ export interface InstitutionSettings {
   classTimes: ClassTime[];
   attendanceValidationMethod: "qrcode" | "geolocation" | "code" | "manual";
   attendanceWindowMinutes: number;
+  defaultTemporaryPassword?: string;
   logo?: string;
-  primaryColor?: string;
+  primaryColor: string;
 }
 
 export interface ClassTime {

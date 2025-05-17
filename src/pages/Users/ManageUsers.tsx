@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { supabaseAdmin } from "@/integrations/supabase/admin";
 import { useActiveInstitution } from "@/hooks/useActiveInstitution";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -33,6 +34,16 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Table,
   TableBody,
   TableCell,
@@ -47,6 +58,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { MoreHorizontal, Plus } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface Profile {
   id: string;
@@ -58,13 +70,15 @@ interface Profile {
   created_at: string;
   updated_at: string;
   avatar_url: string;
+  is_first_access: boolean;
 }
 
 const ManageUsers = () => {
-  const { institutionId, isLoading: isLoadingInstitution } = useActiveInstitution();
+  const { institutionId, institution, isLoading: isLoadingInstitution } = useActiveInstitution();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<Profile | null>(null);
+  const [deletingUser, setDeletingUser] = useState<Profile | null>(null);
   const [newUser, setNewUser] = useState({
     name: "",
     email: "",
@@ -108,33 +122,40 @@ const ManageUsers = () => {
   // Criar usuário
   const createUserMutation = useMutation({
     mutationFn: async (data: typeof newUser) => {
-      // Primeiro criar o usuário no auth
-      const { data: authData, error: authError } = await supabase.auth.signUp({
+      if (!institution?.settings?.defaultTemporaryPassword) {
+        throw new Error("Configure uma senha temporária padrão nas configurações da instituição antes de criar novos usuários.");
+      }
+
+      const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
         email: data.email,
-        password: generateTemporaryPassword(), // Função auxiliar que vamos criar
-        options: {
-          data: {
-            name: data.name,
-            role: data.role,
-          }
+        password: institution.settings.defaultTemporaryPassword,
+        email_confirm: true,
+        user_metadata: {
+          name: data.name,
+          role: data.role,
         }
       });
 
-      if (authError) throw authError;
+      if (authError) {
+        throw authError;
+      }
 
-      // O trigger que criamos vai criar automaticamente o registro em profiles
-      // e copiar o email, mas vamos atualizar os campos adicionais
-      const { error: profileError } = await supabase
-        .from("profiles")
-        .update({
+      // Usar supabaseAdmin para ignorar as políticas RLS
+      const { error: profileError } = await supabaseAdmin
+        .from('profiles')
+        .upsert({
+          id: authData.user.id,
           name: data.name,
           role: data.role,
           institution_id: institutionId,
           active: data.active,
-        })
-        .eq("id", authData.user?.id);
+          is_first_access: true
+        });
 
-      if (profileError) throw profileError;
+      if (profileError) {
+        throw profileError;
+      }
+
       return authData;
     },
     onSuccess: () => {
@@ -148,21 +169,10 @@ const ManageUsers = () => {
       setOpen(false);
       queryClient.invalidateQueries({ queryKey: ["users", institutionId] });
     },
-    onError: (error) => {
+    onError: (error: any) => {
       toast.error(`Erro ao criar usuário: ${error.message}`);
     },
   });
-
-  // Função auxiliar para gerar senha temporária
-  const generateTemporaryPassword = () => {
-    const length = 12;
-    const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
-    let password = "";
-    for (let i = 0; i < length; i++) {
-      password += charset.charAt(Math.floor(Math.random() * charset.length));
-    }
-    return password;
-  };
 
   // Atualizar usuário
   const updateUserMutation = useMutation({
@@ -187,6 +197,30 @@ const ManageUsers = () => {
     },
     onError: (error) => {
       toast.error(`Erro ao atualizar usuário: ${error.message}`);
+    },
+  });
+
+  // Adicionar mutation para exclusão
+  const deleteUserMutation = useMutation({
+    mutationFn: async (id: string) => {
+      // Excluir o usuário usando o cliente admin
+      const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(id);
+
+      if (deleteError) {
+        console.error('Erro ao excluir usuário:', deleteError);
+        throw deleteError;
+      }
+
+      return { success: true };
+    },
+    onSuccess: () => {
+      toast.success("Usuário excluído com sucesso!");
+      setDeletingUser(null);
+      queryClient.invalidateQueries({ queryKey: ["users", institutionId] });
+    },
+    onError: (error: any) => {
+      console.error('Erro ao excluir usuário:', error);
+      toast.error(`Erro ao excluir usuário: ${error.message}`);
     },
   });
 
@@ -241,63 +275,74 @@ const ManageUsers = () => {
               <Plus className="mr-2 h-4 w-4" /> Novo Usuário
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="sm:max-w-[425px]">
             <form onSubmit={handleCreate}>
               <DialogHeader>
                 <DialogTitle>Adicionar Usuário</DialogTitle>
                 <DialogDescription>
-                  Preencha os campos para adicionar um novo usuário.
+                  Preencha as informações para criar um novo usuário.
                 </DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="name">Nome</Label>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="name" className="text-right">
+                    Nome
+                  </Label>
                   <Input
                     id="name"
                     value={newUser.name}
                     onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
-                    placeholder="Nome do usuário"
+                    className="col-span-3"
                   />
                 </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="email">E-mail</Label>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="email" className="text-right">
+                    Email
+                  </Label>
                   <Input
                     id="email"
                     type="email"
                     value={newUser.email}
                     onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
-                    placeholder="email@exemplo.com"
+                    className="col-span-3"
                   />
                 </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="role">Função</Label>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="role" className="text-right">
+                    Função
+                  </Label>
                   <Select
                     value={newUser.role}
                     onValueChange={(value) => setNewUser({ ...newUser, role: value })}
                   >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione" />
+                    <SelectTrigger className="col-span-3">
+                      <SelectValue placeholder="Selecione uma função" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="admin">Administrador</SelectItem>
-                      <SelectItem value="coordinator">Coordenador</SelectItem>
                       <SelectItem value="teacher">Professor</SelectItem>
                       <SelectItem value="student">Aluno</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <Switch
-                    id="active"
-                    checked={newUser.active}
-                    onCheckedChange={(checked) => setNewUser({ ...newUser, active: checked })}
-                  />
-                  <Label htmlFor="active">Usuário Ativo</Label>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="active" className="text-right">
+                    Ativo
+                  </Label>
+                  <div className="col-span-3">
+                    <Switch
+                      id="active"
+                      checked={newUser.active}
+                      onCheckedChange={(checked) =>
+                        setNewUser({ ...newUser, active: checked })
+                      }
+                    />
+                  </div>
                 </div>
               </div>
               <DialogFooter>
                 <Button type="submit" disabled={createUserMutation.isPending}>
-                  {createUserMutation.isPending ? "Criando..." : "Criar Usuário"}
+                  {createUserMutation.isPending ? "Criando..." : "Criar"}
                 </Button>
               </DialogFooter>
             </form>
@@ -328,9 +373,10 @@ const ManageUsers = () => {
               <TableHeader>
                 <TableRow>
                   <TableHead>Nome</TableHead>
-                  <TableHead>E-mail</TableHead>
+                  <TableHead>Email</TableHead>
                   <TableHead>Função</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Senha Atualizada</TableHead>
                   <TableHead className="w-[100px]">Ações</TableHead>
                 </TableRow>
               </TableHeader>
@@ -340,7 +386,46 @@ const ManageUsers = () => {
                     <TableCell>{user.name}</TableCell>
                     <TableCell>{user.email || "Não disponível"}</TableCell>
                     <TableCell>{formatRole(user.role)}</TableCell>
-                    <TableCell>{user.active ? "Ativo" : "Inativo"}</TableCell>
+                    <TableCell>
+                      <div
+                        className={cn(
+                          "flex items-center gap-2",
+                          user.active
+                            ? "text-green-600"
+                            : "text-muted-foreground"
+                        )}
+                      >
+                        <div
+                          className={cn(
+                            "h-2 w-2 rounded-full",
+                            user.active
+                              ? "bg-green-600"
+                              : "bg-muted-foreground"
+                          )}
+                        />
+                        {user.active ? "Ativo" : "Inativo"}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div
+                        className={cn(
+                          "flex items-center gap-2",
+                          !user.is_first_access
+                            ? "text-green-600"
+                            : "text-yellow-600"
+                        )}
+                      >
+                        <div
+                          className={cn(
+                            "h-2 w-2 rounded-full",
+                            !user.is_first_access
+                              ? "bg-green-600"
+                              : "bg-yellow-600"
+                          )}
+                        />
+                        {!user.is_first_access ? "Sim" : "Não"}
+                      </div>
+                    </TableCell>
                     <TableCell>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -352,6 +437,12 @@ const ManageUsers = () => {
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onClick={() => handleEditUser(user)}>
                             Editar
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="text-red-600"
+                            onClick={() => setDeletingUser(user)}
+                          >
+                            Excluir
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -419,6 +510,28 @@ const ManageUsers = () => {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Dialog de Confirmação de Exclusão */}
+      <AlertDialog open={!!deletingUser} onOpenChange={(open) => !open && setDeletingUser(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Você tem certeza?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação não pode ser desfeita. Isso excluirá permanentemente o usuário{" "}
+              {deletingUser?.name} e todos os seus dados associados.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deletingUser && deleteUserMutation.mutate(deletingUser.id)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteUserMutation.isPending ? "Excluindo..." : "Excluir"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

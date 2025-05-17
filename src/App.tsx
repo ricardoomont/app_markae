@@ -1,4 +1,3 @@
-
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -18,6 +17,7 @@ import ManageUsers from "./pages/Users/ManageUsers";
 import ManageSubjects from "./pages/Subjects/ManageSubjects";
 import ManageClasses from "./pages/Classes/ManageClasses";
 import InstitutionSettings from "./pages/Settings/InstitutionSettings";
+import { ProtectedFirstAccessRoute } from "./routes/ProtectedFirstAccessRoute";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -47,9 +47,12 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 // Auth wrapper to provide context
 const AuthWrapper = () => (
   <Routes>
+    {/* Rotas públicas */}
     <Route path="/login" element={<Login />} />
     <Route path="/reset-password" element={<ResetPassword />} />
+    <Route path="/first-access" element={<ProtectedFirstAccessRoute />} />
     
+    {/* Rotas protegidas dentro do Layout */}
     <Route path="/" element={
       <ProtectedRoute>
         <Layout />

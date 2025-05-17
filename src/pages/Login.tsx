@@ -1,96 +1,123 @@
-
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
-import { Loader2 } from "lucide-react";
+import { Loader2, Eye, EyeOff } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { isValidEmail, isValidPassword } from "@/lib/auth-helpers";
 import { toast } from "sonner";
+import { FirstAccessPasswordChange } from "@/components/auth/FirstAccessPasswordChange";
+import { supabase } from "@/integrations/supabase/client";
+import { supabaseAdmin } from "@/integrations/supabase/admin";
 
 const Login = () => {
-  // Login state
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  
-  // Register state
-  const [registerEmail, setRegisterEmail] = useState("");
-  const [registerPassword, setRegisterPassword] = useState("");
-  const [registerConfirmPassword, setRegisterConfirmPassword] = useState("");
-  const [name, setName] = useState("");
-  
-  // Reset password state
-  const [resetEmail, setResetEmail] = useState("");
-  
-  // UI state
-  const [activeTab, setActiveTab] = useState("login");
-  const { signIn, signUp, resetPassword, loading } = useSupabaseAuth();
+  const navigate = useNavigate();
+  const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [isFirstAccess, setIsFirstAccess] = useState(false);
+  const [userEmail, setUserEmail] = useState("");
+  const [formData, setFormData] = useState({
+    email: "",
+    password: "",
+  });
 
-  const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!isValidEmail(email)) {
-      toast.error("Por favor, insira um email válido");
-      return;
-    }
-    
+    setIsLoading(true);
+
     try {
-      await signIn(email, password);
-    } catch (error) {
-      // Error is already handled in the signIn function
+      console.log("Verificando primeiro acesso...");
+
+      // Primeiro buscar o perfil do usuário
+      const { data: profileData, error: profileError } = await supabaseAdmin
+        .from("profiles")
+        .select("*")
+        .eq("email", formData.email)
+        .single();
+
+      if (profileError) {
+        if (profileError.code === "PGRST116") {
+          throw new Error("Usuário não encontrado");
+        }
+        throw profileError;
+      }
+
+      // Se for primeiro acesso
+      if (profileData.is_first_access) {
+        console.log("Primeiro acesso detectado, buscando configurações da instituição...");
+
+        // Buscar configurações da instituição
+        const { data: institutionSettings, error: institutionError } = await supabaseAdmin
+          .from("institution_settings")
+          .select("default_temporary_password")
+          .eq("institution_id", profileData.institution_id)
+          .single();
+
+        if (institutionError) {
+          console.error("Erro ao buscar configurações da instituição:", institutionError);
+          throw new Error("Erro ao buscar configurações da instituição");
+        }
+
+        if (!institutionSettings) {
+          throw new Error("Configurações da instituição não encontradas");
+        }
+
+        console.log("Dados da instituição:", institutionSettings);
+
+        const temporaryPassword = institutionSettings.default_temporary_password;
+        
+        if (!temporaryPassword) {
+          throw new Error("Senha temporária não configurada para esta instituição");
+        }
+
+        if (formData.password !== temporaryPassword) {
+          throw new Error("Senha temporária incorreta");
+        }
+
+        console.log("Senha temporária válida, redirecionando para troca...");
+        setUserEmail(formData.email);
+        setIsFirstAccess(true);
+        return;
+      }
+
+      console.log("Login normal, autenticando...");
+
+      // Se não for primeiro acesso, fazer login normal
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: formData.email,
+        password: formData.password,
+      });
+
+      if (signInError) {
+        throw signInError;
+      }
+
+      console.log("Login bem sucedido, redirecionando...");
+      toast.success("Login realizado com sucesso!");
+      navigate("/dashboard");
+
+    } catch (error: any) {
+      console.error("Erro:", error);
+      toast.error(`Erro ao fazer login: ${error.message}`);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleRegister = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    
-    if (!isValidEmail(registerEmail)) {
-      toast.error("Por favor, insira um email válido");
-      return;
-    }
-    
-    if (!isValidPassword(registerPassword)) {
-      toast.error("A senha deve ter pelo menos 6 caracteres");
-      return;
-    }
-    
-    if (registerPassword !== registerConfirmPassword) {
-      toast.error("As senhas não coincidem");
-      return;
-    }
-    
-    if (!name.trim()) {
-      toast.error("Por favor, insira seu nome");
-      return;
-    }
-    
-    try {
-      await signUp(registerEmail, registerPassword, name);
-      setActiveTab("login");
-    } catch (error) {
-      // Error is already handled in the signUp function
-    }
-  };
+  // Se for primeiro acesso, mostrar tela de troca de senha
+  if (isFirstAccess) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <FirstAccessPasswordChange 
+          userEmail={userEmail}
+          currentPassword={formData.password}
+        />
+      </div>
+    );
+  }
 
-  const handleResetPassword = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    
-    if (!isValidEmail(resetEmail)) {
-      toast.error("Por favor, insira um email válido");
-      return;
-    }
-    
-    try {
-      await resetPassword(resetEmail);
-      setActiveTab("login");
-    } catch (error) {
-      // Error is already handled in the resetPassword function
-    }
-  };
-
+  // Tela de login normal
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="max-w-md w-full p-4">
@@ -105,16 +132,13 @@ const Login = () => {
             </CardDescription>
           </CardHeader>
 
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <Tabs value="login">
             <TabsList className="grid grid-cols-3 mx-4">
               <TabsTrigger value="login">Login</TabsTrigger>
-              <TabsTrigger value="register">Cadastro</TabsTrigger>
-              <TabsTrigger value="reset">Recuperar</TabsTrigger>
             </TabsList>
             
-            {/* Login Tab */}
             <TabsContent value="login">
-              <form onSubmit={handleLogin}>
+              <form onSubmit={handleSubmit} className="space-y-4">
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="email">Email</Label>
@@ -122,8 +146,8 @@ const Login = () => {
                       id="email" 
                       type="email" 
                       placeholder="email@exemplo.com" 
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      value={formData.email}
+                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                       required
                       autoComplete="email"
                     />
@@ -132,126 +156,41 @@ const Login = () => {
                     <div className="flex items-center justify-between">
                       <Label htmlFor="password">Senha</Label>
                     </div>
-                    <Input 
-                      id="password" 
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                      autoComplete="current-password"
-                    />
+                    <div className="relative">
+                      <Input 
+                        id="password" 
+                        type={showPassword ? "text" : "password"}
+                        value={formData.password}
+                        onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                        required
+                        autoComplete="current-password"
+                        className="pr-10"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-0 top-0 h-full px-3"
+                        onClick={() => setShowPassword(!showPassword)}
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
                 <CardFooter>
-                  <Button type="submit" className="w-full" disabled={loading}>
-                    {loading ? (
+                  <Button type="submit" className="w-full" disabled={isLoading}>
+                    {isLoading ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" /> 
                         Entrando...
                       </>
                     ) : (
                       "Entrar"
-                    )}
-                  </Button>
-                </CardFooter>
-              </form>
-            </TabsContent>
-            
-            {/* Register Tab */}
-            <TabsContent value="register">
-              <form onSubmit={handleRegister}>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Nome</Label>
-                    <Input 
-                      id="name" 
-                      type="text" 
-                      placeholder="Seu nome completo" 
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="register-email">Email</Label>
-                    <Input 
-                      id="register-email" 
-                      type="email" 
-                      placeholder="email@exemplo.com" 
-                      value={registerEmail}
-                      onChange={(e) => setRegisterEmail(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="register-password">Senha</Label>
-                    <Input 
-                      id="register-password" 
-                      type="password"
-                      placeholder="********"
-                      value={registerPassword}
-                      onChange={(e) => setRegisterPassword(e.target.value)}
-                      required
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Senha deve ter pelo menos 6 caracteres
-                    </p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="confirm-password">Confirmar Senha</Label>
-                    <Input 
-                      id="confirm-password" 
-                      type="password"
-                      placeholder="********"
-                      value={registerConfirmPassword}
-                      onChange={(e) => setRegisterConfirmPassword(e.target.value)}
-                      required
-                    />
-                  </div>
-                </CardContent>
-                <CardFooter>
-                  <Button type="submit" className="w-full" disabled={loading}>
-                    {loading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> 
-                        Cadastrando...
-                      </>
-                    ) : (
-                      "Cadastrar"
-                    )}
-                  </Button>
-                </CardFooter>
-              </form>
-            </TabsContent>
-            
-            {/* Reset Password Tab */}
-            <TabsContent value="reset">
-              <form onSubmit={handleResetPassword}>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="reset-email">Email</Label>
-                    <Input 
-                      id="reset-email" 
-                      type="email" 
-                      placeholder="email@exemplo.com" 
-                      value={resetEmail}
-                      onChange={(e) => setResetEmail(e.target.value)}
-                      required
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Você receberá um email com instruções para redefinir sua senha
-                    </p>
-                  </div>
-                </CardContent>
-                <CardFooter>
-                  <Button type="submit" className="w-full" disabled={loading}>
-                    {loading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> 
-                        Enviando...
-                      </>
-                    ) : (
-                      "Recuperar Senha"
                     )}
                   </Button>
                 </CardFooter>

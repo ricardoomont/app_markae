@@ -441,3 +441,16 @@ export const Constants = {
     Enums: {},
   },
 } as const
+
+export type Profile = {
+  id: string;
+  name: string | null;
+  email: string | null;
+  role: string;
+  active: boolean | null;
+  avatar_url: string | null;
+  institution_id: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  is_first_access: boolean | null;
+};

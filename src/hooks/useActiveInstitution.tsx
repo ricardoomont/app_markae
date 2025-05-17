@@ -1,4 +1,3 @@
-
 import { useSupabaseAuth } from "./useSupabaseAuth";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -83,7 +82,9 @@ export function useActiveInstitution() {
           })),
           // Corrigir o tipo aqui usando type assertion para garantir que o valor seja do tipo esperado
           attendanceValidationMethod: (data.settings?.attendance_validation_method || 'qrcode') as "qrcode" | "geolocation" | "code" | "manual",
-          attendanceWindowMinutes: data.settings?.attendance_window_minutes || 15
+          attendanceWindowMinutes: data.settings?.attendance_window_minutes || 15,
+          defaultTemporaryPassword: data.settings?.default_temporary_password || '',
+          primaryColor: data.settings?.primary_color || '#991910'
         }
       };
       

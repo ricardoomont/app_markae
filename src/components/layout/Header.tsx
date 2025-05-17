@@ -61,29 +61,40 @@ export function Header() {
   const { profile, institution, isLoading } = useActiveInstitution();
   const { isMobile } = useSidebar();
   const [isOpen, setIsOpen] = useState(false);
-  const [profileData, setProfileData] = useState<any>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchProfile = async () => {
+    const fetchUserRole = async () => {
       if (user) {
         const { data, error } = await supabase
           .from("profiles")
-          .select("*")
+          .select("role")
           .eq("id", user.id)
           .single();
           
         if (!error && data) {
-          setProfileData(data);
+          setUserRole(data.role);
         }
       }
     };
     
-    fetchProfile();
+    fetchUserRole();
   }, [user]);
 
-  const isAdmin = profileData?.role === "admin";
-  const isCoordinator = profileData?.role === "coordinator";
-  const isTeacher = profileData?.role === "teacher";
+  // Função para formatar o papel do usuário em português
+  const formatRole = (role?: string | null) => {
+    const roles: Record<string, string> = {
+      admin: "Administrador",
+      coordinator: "Coordenador",
+      teacher: "Professor",
+      student: "Aluno"
+    };
+    return roles[role || ""] || "Usuário";
+  };
+
+  const isAdmin = userRole === "admin";
+  const isCoordinator = userRole === "coordinator";
+  const isTeacher = userRole === "teacher";
 
   const showUsersMenu = isAdmin || isCoordinator;
   const showSubjectsMenu = isAdmin || isCoordinator;
@@ -212,21 +223,24 @@ export function Header() {
                         {profile?.name?.charAt(0) || user?.email?.charAt(0)}
                       </AvatarFallback>
                     </Avatar>
-                    <span className="hidden md:inline-block text-sm">
-                      {profile?.name || user?.email}
+                    <span className="hidden md:inline-block text-sm font-medium">
+                      {profile?.name}
                     </span>
                   </>
                 )}
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-56" align="end" forceMount>
+            <DropdownMenuContent className="w-72" align="end" forceMount>
               <DropdownMenuLabel className="font-normal">
                 <div className="flex flex-col space-y-1">
-                  <p className="text-sm font-medium leading-none">
-                    {profile?.name || user?.email}
+                  <p className="text-sm font-bold">
+                    {profile?.name || "Usuário"}
                   </p>
-                  <p className="text-xs leading-none text-muted-foreground">
+                  <p className="text-xs text-muted-foreground">
                     {user?.email}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Perfil: {formatRole(userRole)}
                   </p>
                 </div>
               </DropdownMenuLabel>
