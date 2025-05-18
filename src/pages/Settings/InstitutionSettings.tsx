@@ -8,11 +8,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useActiveInstitution } from "@/hooks/useActiveInstitution";
 import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator";
-import { Plus, Trash2, Clock, Edit, Save, X } from "lucide-react";
+import { Plus, Trash2, Clock, Edit, Save, X, MapPin } from "lucide-react";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient, useMutation, useQuery } from "@tanstack/react-query";
+import type { InstitutionSettings } from "@/types";
 
 type ClassTimeType = {
   id: string;
@@ -22,6 +23,14 @@ type ClassTimeType = {
   daysOfWeek: number[];
   isEditing?: boolean;
 };
+
+interface InstitutionData {
+  id: string;
+  name: string;
+  logo: string;
+  active: boolean;
+  settings: InstitutionSettings;
+}
 
 const InstitutionSettings = () => {
   const { institution, isLoading: isLoadingInstitutionHook, institutionId } = useActiveInstitution();
@@ -56,7 +65,7 @@ const InstitutionSettings = () => {
     enabled: !!institutionId
   });
   
-  const [institutionData, setInstitutionData] = useState<any>(null);
+  const [institutionData, setInstitutionData] = useState<InstitutionData | null>(null);
   const [localClassTimes, setLocalClassTimes] = useState<ClassTimeType[]>([]);
   const [newClassTime, setNewClassTime] = useState<Partial<ClassTimeType>>({
     name: "",
@@ -75,9 +84,15 @@ const InstitutionSettings = () => {
         logo: institution.logo || "",
         active: institution.active || false,
         settings: {
-          attendanceValidationMethod: institution.settings?.attendanceValidationMethod || "qrcode",
-          attendanceWindowMinutes: institution.settings?.attendanceWindowMinutes || 15,
-          defaultTemporaryPassword: institution.settings?.defaultTemporaryPassword || "",
+          id: institution.settings?.id || "",
+          institution_id: institution.id,
+          primary_color: institution.settings?.primary_color || "#000000",
+          attendance_validation_method: (institution.settings?.attendance_validation_method || "qrcode") as 'qrcode' | 'geolocation' | 'code' | 'manual',
+          attendance_window_minutes: institution.settings?.attendance_window_minutes || 15,
+          default_temporary_password: institution.settings?.default_temporary_password || "",
+          latitude: institution.settings?.latitude || null,
+          longitude: institution.settings?.longitude || null,
+          geolocation_radius: institution.settings?.geolocation_radius || 100,
         },
       });
     }
@@ -92,7 +107,7 @@ const InstitutionSettings = () => {
 
   // Atualizar instituição
   const updateInstitutionMutation = useMutation({
-    mutationFn: async (data: any) => {
+    mutationFn: async (data: InstitutionData) => {
       if (!data || !data.id || !data.settings) {
         throw new Error("Dados da instituição inválidos ou incompletos");
       }
@@ -116,9 +131,12 @@ const InstitutionSettings = () => {
       const { error: settingsError } = await supabase
         .from('institution_settings')
         .update({
-          attendance_validation_method: data.settings.attendanceValidationMethod || 'qrcode',
-          attendance_window_minutes: data.settings.attendanceWindowMinutes || 15,
-          default_temporary_password: data.settings.defaultTemporaryPassword,
+          attendance_validation_method: (data.settings.attendance_validation_method || 'qrcode') as 'qrcode' | 'geolocation' | 'code' | 'manual',
+          attendance_window_minutes: data.settings.attendance_window_minutes || 15,
+          default_temporary_password: data.settings.default_temporary_password,
+          latitude: data.settings.latitude,
+          longitude: data.settings.longitude,
+          geolocation_radius: data.settings.geolocation_radius,
         })
         .eq('institution_id', data.id);
         
@@ -438,6 +456,24 @@ const InstitutionSettings = () => {
             />
             <Label htmlFor="active">Instituição Ativa</Label>
           </div>
+          <Button 
+            onClick={() => {
+              setIsSaving(true);
+              updateInstitutionMutation.mutate(
+                {
+                  ...institutionData,
+                  settings: institutionData.settings // manter as configurações atuais
+                },
+                {
+                  onSettled: () => setIsSaving(false)
+                }
+              );
+            }} 
+            disabled={isSaving}
+            className="w-full"
+          >
+            {isSaving ? "Salvando..." : "Salvar Informações Básicas"}
+          </Button>
         </CardContent>
       </Card>
 
@@ -452,32 +488,24 @@ const InstitutionSettings = () => {
           <div className="space-y-2">
             <Label>Método de Validação de Presença</Label>
             <RadioGroup
-              value={institutionData.settings.attendanceValidationMethod}
+              value={institutionData.settings.attendance_validation_method}
               onValueChange={(value) =>
                 setInstitutionData({
                   ...institutionData,
                   settings: {
                     ...institutionData.settings,
-                    attendanceValidationMethod: value,
+                    attendance_validation_method: value as 'qrcode' | 'geolocation' | 'code' | 'manual',
                   },
                 })
               }
+              className="flex flex-col space-y-2"
             >
               <div className="flex items-center space-x-2">
-                <RadioGroupItem value="qrcode" id="qrcode" />
-                <Label htmlFor="qrcode">QR Code</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="code" id="code" />
-                <Label htmlFor="code">Código de Verificação</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="geolocation" id="geolocation" />
+                <RadioGroupItem
+                  value="geolocation"
+                  id="geolocation"
+                />
                 <Label htmlFor="geolocation">Localização (Geofencing)</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="manual" id="manual" />
-                <Label htmlFor="manual">Confirmação Manual</Label>
               </div>
             </RadioGroup>
           </div>
@@ -489,13 +517,13 @@ const InstitutionSettings = () => {
               type="number"
               min="0"
               max="60"
-              value={institutionData.settings.attendanceWindowMinutes}
+              value={institutionData.settings.attendance_window_minutes}
               onChange={(e) =>
                 setInstitutionData({
                   ...institutionData,
                   settings: {
                     ...institutionData.settings,
-                    attendanceWindowMinutes: parseInt(e.target.value) || 0,
+                    attendance_window_minutes: parseInt(e.target.value) || 0,
                   },
                 })
               }
@@ -503,6 +531,123 @@ const InstitutionSettings = () => {
             <p className="text-sm text-muted-foreground">
               Tempo de tolerância para o aluno confirmar presença após o início da aula.
             </p>
+          </div>
+
+          <div className="space-y-4 border-t pt-4">
+            <h3 className="font-medium">Configurações de Geolocalização</h3>
+            
+            <div className="space-y-2">
+              <Label htmlFor="latitude">Latitude</Label>
+              <Input
+                id="latitude"
+                type="number"
+                step="0.000001"
+                value={institutionData.settings.latitude || ""}
+                onChange={(e) =>
+                  setInstitutionData({
+                    ...institutionData,
+                    settings: {
+                      ...institutionData.settings,
+                      latitude: parseFloat(e.target.value) || 0,
+                    },
+                  })
+                }
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="longitude">Longitude</Label>
+              <Input
+                id="longitude"
+                type="number"
+                step="0.000001"
+                value={institutionData.settings.longitude || ""}
+                onChange={(e) =>
+                  setInstitutionData({
+                    ...institutionData,
+                    settings: {
+                      ...institutionData.settings,
+                      longitude: parseFloat(e.target.value) || 0,
+                    },
+                  })
+                }
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="radius">Raio de Tolerância (metros)</Label>
+              <Input
+                id="radius"
+                type="number"
+                min="10"
+                max="1000"
+                value={institutionData.settings.geolocation_radius || ""}
+                onChange={(e) =>
+                  setInstitutionData({
+                    ...institutionData,
+                    settings: {
+                      ...institutionData.settings,
+                      geolocation_radius: parseInt(e.target.value) || 0,
+                    },
+                  })
+                }
+              />
+              <p className="text-sm text-muted-foreground">
+                Distância máxima permitida da instituição para confirmar presença.
+              </p>
+            </div>
+
+            <Button 
+              variant="secondary" 
+              className="w-full"
+              onClick={() => {
+                if ("geolocation" in navigator) {
+                  navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                      setInstitutionData({
+                        ...institutionData,
+                        settings: {
+                          ...institutionData.settings,
+                          latitude: position.coords.latitude,
+                          longitude: position.coords.longitude,
+                        },
+                      });
+                      toast.success("Localização atual definida com sucesso!");
+                    },
+                    (error) => {
+                      toast.error("Erro ao obter localização: " + error.message);
+                    }
+                  );
+                } else {
+                  toast.error("Seu navegador não suporta geolocalização");
+                }
+              }}
+            >
+              <MapPin className="w-4 h-4 mr-2" />
+              Usar Localização Atual
+            </Button>
+
+            <Button 
+              onClick={() => {
+                setIsSaving(true);
+                updateInstitutionMutation.mutate(
+                  {
+                    ...institutionData,
+                    settings: {
+                      ...institutionData.settings,
+                      attendance_validation_method: 'geolocation'
+                    }
+                  },
+                  {
+                    onSettled: () => setIsSaving(false)
+                  }
+                );
+              }} 
+              disabled={isSaving}
+              className="w-full"
+            >
+              {isSaving ? "Salvando..." : "Salvar Configurações de Presença"}
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -520,13 +665,13 @@ const InstitutionSettings = () => {
             <Input
               id="defaultPassword"
               type="text"
-              value={institutionData.settings.defaultTemporaryPassword || ''}
+              value={institutionData.settings.default_temporary_password || ''}
               onChange={(e) =>
                 setInstitutionData({
                   ...institutionData,
                   settings: {
                     ...institutionData.settings,
-                    defaultTemporaryPassword: e.target.value,
+                    default_temporary_password: e.target.value,
                   },
                 })
               }
@@ -537,6 +682,24 @@ const InstitutionSettings = () => {
               Eles poderão alterá-la no primeiro acesso.
             </p>
           </div>
+          <Button 
+            onClick={() => {
+              setIsSaving(true);
+              updateInstitutionMutation.mutate(
+                {
+                  ...institutionData,
+                  settings: institutionData.settings
+                },
+                {
+                  onSettled: () => setIsSaving(false)
+                }
+              );
+            }} 
+            disabled={isSaving}
+            className="w-full"
+          >
+            {isSaving ? "Salvando..." : "Salvar Configurações de Usuários"}
+          </Button>
         </CardContent>
       </Card>
 
@@ -742,12 +905,6 @@ const InstitutionSettings = () => {
           </div>
         </CardContent>
       </Card>
-
-      <div className="flex justify-end">
-        <Button onClick={handleSave} disabled={isSaving || updateInstitutionMutation.isPending}>
-          {isSaving ? "Salvando..." : "Salvar Configurações"}
-        </Button>
-      </div>
     </div>
   );
 };

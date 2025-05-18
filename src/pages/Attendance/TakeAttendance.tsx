@@ -239,7 +239,7 @@ const TakeAttendance = () => {
               ) : (
                 teacherClasses.map((cls) => (
                   <SelectItem key={cls.id} value={cls.id}>
-                    {format(new Date(cls.date), "dd/MM/yyyy")} - {cls.subject?.name || "Sem matéria"} ({cls.classTime?.name || "Horário não definido"})
+                    {format(new Date(`${cls.date}T12:00:00`), "dd/MM/yyyy")} - {cls.subject?.name || "Sem matéria"} ({cls.classTime?.name || "Horário não definido"})
                   </SelectItem>
                 ))
               )}

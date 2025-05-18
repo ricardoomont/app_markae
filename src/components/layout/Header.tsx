@@ -132,9 +132,15 @@ export function Header() {
                         Dashboard
                       </NavItem>
                       
-                      <NavItem icon={CheckSquare} to="/attendance" onNavigate={() => setIsOpen(false)}>
-                        Presenças
-                      </NavItem>
+                      {userRole === 'student' ? (
+                        <NavItem icon={CheckSquare} to="/attendance/confirm" onNavigate={() => setIsOpen(false)}>
+                          Confirmar Presença
+                        </NavItem>
+                      ) : (
+                        <NavItem icon={CheckSquare} to="/attendance" onNavigate={() => setIsOpen(false)}>
+                          Presenças
+                        </NavItem>
+                      )}
                       
                       {showClassesMenu && (
                         <NavItem icon={Calendar} to="/classes" onNavigate={() => setIsOpen(false)}>

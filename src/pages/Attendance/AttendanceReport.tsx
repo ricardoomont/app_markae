@@ -139,7 +139,7 @@ const AttendanceReport = () => {
   };
 
   const formatDateTime = (dateString: string, timeString?: string) => {
-    const date = new Date(dateString);
+    const date = new Date(`${dateString}T12:00:00`);
     const formattedDate = format(date, "dd/MM/yyyy", { locale: ptBR });
     return timeString ? `${formattedDate} às ${timeString}` : formattedDate;
   };
@@ -173,7 +173,7 @@ const AttendanceReport = () => {
                 <SelectContent>
                   {classes.map((cls) => (
                     <SelectItem key={cls.id} value={cls.id}>
-                      {cls.subject?.name || "Sem matéria"} - {format(new Date(cls.date), "dd/MM/yyyy")} ({cls.classTime?.start_time} - {cls.classTime?.end_time})
+                      {cls.subject?.name || "Sem matéria"} - {format(new Date(`${cls.date}T12:00:00`), "dd/MM/yyyy")} ({cls.classTime?.start_time} - {cls.classTime?.end_time})
                     </SelectItem>
                   ))}
                 </SelectContent>

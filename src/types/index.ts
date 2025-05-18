@@ -20,20 +20,36 @@ export interface Institution {
 }
 
 export interface InstitutionSettings {
-  classTimes: ClassTime[];
-  attendanceValidationMethod: "qrcode" | "geolocation" | "code" | "manual";
-  attendanceWindowMinutes: number;
-  defaultTemporaryPassword?: string;
-  logo?: string;
-  primaryColor: string;
+  id: string;
+  institution_id: string;
+  attendance_validation_method: 'qrcode' | 'geolocation' | 'code' | 'manual';
+  attendance_window_minutes: number;
+  primary_color: string;
+  default_temporary_password?: string;
+  latitude: number;
+  longitude: number;
+  geolocation_radius: number;
+  created_at: string;
+  updated_at: string;
+  classTimes?: Array<{
+    id: string;
+    name: string;
+    startTime: string;
+    endTime: string;
+    daysOfWeek: number[];
+  }>;
 }
 
 export interface ClassTime {
   id: string;
   name: string;
-  startTime: string; // Format: "HH:MM"
-  endTime: string; // Format: "HH:MM"
-  daysOfWeek: number[]; // 0 = Sunday, 1 = Monday, etc.
+  start_time: string; // Format: "HH:MM"
+  end_time: string; // Format: "HH:MM"
+  days_of_week: number[]; // 0 = Sunday, 1 = Monday, etc.
+  institution_id: string;
+  active: boolean;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface Subject {
@@ -47,24 +63,42 @@ export interface Subject {
 export interface Class {
   id: string;
   date: string; // ISO date
-  subjectId: string;
-  subject?: Subject;
-  teacherId: string;
-  teacher?: User;
-  classTimeId: string;
+  subject_id: string;
+  subject?: {
+    id: string;
+    name: string;
+  };
+  teacher_id: string;
+  teacher?: {
+    id: string;
+    name: string;
+  };
+  class_time_id: string;
   classTime?: ClassTime;
-  institutionId: string;
+  institution_id: string;
   title?: string;
   description?: string;
+  active: boolean;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface Attendance {
   id: string;
-  classId: string;
-  studentId: string;
-  student?: User;
-  status: "present" | "absent" | "late" | "excused";
-  confirmedAt?: string; // ISO date
-  confirmedBy?: string; // User ID of who confirmed (teacher, admin, or self)
+  class_id: string;
+  student_id: string;
+  status: 'present' | 'absent' | 'pending';
+  confirmed_at?: string;
+  confirmed_by?: string;
   notes?: string;
+  latitude?: number;
+  longitude?: number;
+  distance_from_institution?: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface GeolocationError {
+  code: number;
+  message: string;
 }

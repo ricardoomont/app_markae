@@ -79,9 +79,15 @@ export function AppSidebar() {
                   Dashboard
                 </NavItem>
                 
-                <NavItem icon={CheckSquare} to="/attendance" onNavigate={() => setIsOpen(false)}>
-                  Presenças
-                </NavItem>
+                {profileData?.role === 'student' ? (
+                  <NavItem icon={CheckSquare} to="/attendance/confirm" onNavigate={() => setIsOpen(false)}>
+                    Confirmar Presença
+                  </NavItem>
+                ) : (
+                  <NavItem icon={CheckSquare} to="/attendance" onNavigate={() => setIsOpen(false)}>
+                    Presenças
+                  </NavItem>
+                )}
                 
                 {showClassesMenu && (
                   <NavItem icon={Calendar} to="/classes" onNavigate={() => setIsOpen(false)}>
@@ -149,9 +155,15 @@ export function AppSidebar() {
             Dashboard
           </NavItem>
           
-          <NavItem icon={CheckSquare} to="/attendance">
-            Presenças
-          </NavItem>
+          {profileData?.role === 'student' ? (
+            <NavItem icon={CheckSquare} to="/attendance/confirm">
+              Confirmar Presença
+            </NavItem>
+          ) : (
+            <NavItem icon={CheckSquare} to="/attendance">
+              Presenças
+            </NavItem>
+          )}
           
           {showClassesMenu && (
             <NavItem icon={Calendar} to="/classes">

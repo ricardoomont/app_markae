@@ -62,6 +62,7 @@ const AuthWrapper = () => (
       <Route path="dashboard" element={<Dashboard />} />
       <Route path="profile" element={<Profile />} />
       
+      {/* Rotas de presença */}
       <Route path="attendance">
         <Route index element={<AttendanceReport />} />
         <Route path="take" element={<TakeAttendance />} />

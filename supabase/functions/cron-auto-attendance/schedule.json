@@ -1,0 +1,4 @@
+{
+  "schedule": "*/15 * * * *",
+  "description": "Executa a marcação automática de faltas a cada 15 minutos"
+} 

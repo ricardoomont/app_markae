@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { useActiveInstitution } from "@/hooks/useActiveInstitution";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -172,7 +171,7 @@ export default function Dashboard() {
             ) : (
               <div className="space-y-3">
                 {nextClasses.map((cls) => {
-                  const classDate = new Date(cls.date);
+                  const classDate = new Date(`${cls.date}T12:00:00`);
                   
                   return (
                     <div key={cls.id} className="flex items-center justify-between border-b pb-2">

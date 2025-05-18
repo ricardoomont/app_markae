@@ -255,7 +255,8 @@ const ManageClasses = () => {
           teacher_id: data.teacher_id,
           class_time_id: data.class_time_id,
         })
-        .select();
+        .select()
+        .abortSignal(AbortSignal.timeout(30000));
         
       if (error) throw error;
       return newClassData;
@@ -515,7 +516,7 @@ const ManageClasses = () => {
                       !cls.active && "text-muted-foreground"
                     )}>{cls.subject?.name || "Sem matéria"}</CardTitle>
                     <CardDescription>
-                      {format(new Date(cls.date), "dd/MM/yyyy")} • {cls.classTime?.name} ({cls.classTime?.start_time} - {cls.classTime?.end_time})
+                      {format(new Date(`${cls.date}T12:00:00`), "dd/MM/yyyy")} • {cls.classTime?.name} ({cls.classTime?.start_time} - {cls.classTime?.end_time})
                     </CardDescription>
                   </div>
                   <div className="flex items-center gap-2">
@@ -730,7 +731,7 @@ const ManageClasses = () => {
             <AlertDialogTitle>Você tem certeza?</AlertDialogTitle>
             <AlertDialogDescription>
               Esta ação não pode ser desfeita. Isso excluirá permanentemente a aula
-              {deletingClass?.subject?.name && ` de ${deletingClass.subject.name}`} do dia {deletingClass && format(new Date(deletingClass.date), "dd/MM/yyyy")}.
+              {deletingClass?.subject?.name && ` de ${deletingClass.subject.name}`} do dia {deletingClass && format(new Date(`${deletingClass.date}T12:00:00`), "dd/MM/yyyy")}.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

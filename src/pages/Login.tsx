@@ -155,6 +155,34 @@ const Login = () => {
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <Label htmlFor="password">Senha</Label>
+                      <Button
+                        variant="link"
+                        className="px-0 font-normal"
+                        type="button"
+                        onClick={async () => {
+                          if (!formData.email) {
+                            toast.error("Digite seu email para recuperar a senha");
+                            return;
+                          }
+                          setIsLoading(true);
+                          try {
+                            const { error } = await supabase.auth.resetPasswordForEmail(
+                              formData.email,
+                              {
+                                redirectTo: `${window.location.origin}/reset-password`,
+                              }
+                            );
+                            if (error) throw error;
+                            toast.success("Email de recuperação enviado com sucesso!");
+                          } catch (error: any) {
+                            toast.error(`Erro ao enviar email: ${error.message}`);
+                          } finally {
+                            setIsLoading(false);
+                          }
+                        }}
+                      >
+                        Esqueceu a senha?
+                      </Button>
                     </div>
                     <div className="relative">
                       <Input 
