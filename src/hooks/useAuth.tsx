@@ -25,79 +25,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    let mounted = true;
-
-    async function initializeAuth() {
-      if (!mounted) return;
-      
-      try {
-        console.log("Inicializando autenticação...");
-        setLoading(true);
-        
-        // Buscar sessão atual
-        const { data: { session } } = await supabase.auth.getSession();
-
-        if (!mounted) return;
-
-        if (session?.user) {
-          console.log("Sessão encontrada, buscando perfil do usuário...");
-          await fetchUser(session.user.id);
-        } else {
-          console.log("Nenhuma sessão encontrada");
-          setUser(null);
-        }
-      } catch (error) {
-        console.error("Erro na inicialização da autenticação:", error);
-        if (mounted) {
-          setUser(null);
-        }
-      } finally {
-        if (mounted) {
-          setLoading(false);
-        }
-      }
-    }
-
-    // Inicializar autenticação
-    initializeAuth();
-
-    // Escutar mudanças na autenticação
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (!mounted) return;
-
-      console.log("Mudança no estado de autenticação:", _event);
-      setLoading(true);
-      
-      try {
-        if (session?.user) {
-          console.log("Novo usuário autenticado, atualizando perfil...");
-          await fetchUser(session.user.id);
-        } else {
-          console.log("Usuário desconectado");
-          setUser(null);
-        }
-      } catch (error) {
-        console.error("Erro ao atualizar usuário:", error);
-        setUser(null);
-      } finally {
-        if (mounted) {
-          setLoading(false);
-        }
-      }
-    });
-
-    return () => {
-      mounted = false;
-      subscription.unsubscribe();
-    };
-  }, []);
-
   const fetchUser = async (userId: string) => {
     try {
-      console.log("Buscando perfil do usuário:", userId);
+      console.log("[Auth] Buscando perfil do usuário:", userId);
 
       // Buscar dados do perfil
       const { data: profileData, error: profileError } = await supabase
@@ -107,12 +37,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .single();
 
       if (profileError) {
-        console.error("Erro ao buscar perfil:", profileError);
+        console.error("[Auth] Erro ao buscar perfil:", profileError);
         throw profileError;
       }
 
       if (!profileData) {
-        console.log("Nenhum perfil encontrado");
+        console.log("[Auth] Nenhum perfil encontrado");
         setUser(null);
         return;
       }
@@ -121,12 +51,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
 
       if (authError) {
-        console.error("Erro ao buscar dados do usuário:", authError);
+        console.error("[Auth] Erro ao buscar dados do usuário:", authError);
         throw authError;
       }
 
-      console.log("Perfil encontrado:", profileData);
-      console.log("Dados de autenticação:", authUser);
+      console.log("[Auth] Perfil encontrado:", profileData);
       
       // Mapear os dados do perfil para o tipo User
       const profile = profileData as ProfileData;
@@ -143,10 +72,77 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       setUser(userData);
     } catch (error) {
-      console.error("Erro ao buscar usuário:", error);
+      console.error("[Auth] Erro ao buscar usuário:", error);
       setUser(null);
+      throw error;
     }
   };
+
+  useEffect(() => {
+    let mounted = true;
+
+    // Função para inicializar a autenticação
+    const initializeAuth = async () => {
+      try {
+        console.log("[Auth] Inicializando autenticação...");
+        
+        // Buscar sessão atual
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+        if (sessionError) {
+          console.error("[Auth] Erro ao buscar sessão:", sessionError);
+          throw sessionError;
+        }
+
+        if (!mounted) return;
+
+        if (session?.user) {
+          console.log("[Auth] Sessão encontrada, buscando perfil do usuário...");
+          await fetchUser(session.user.id);
+        } else {
+          console.log("[Auth] Nenhuma sessão encontrada");
+          setUser(null);
+        }
+      } catch (error) {
+        console.error("[Auth] Erro na inicialização da autenticação:", error);
+        if (mounted) {
+          setUser(null);
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    // Escutar mudanças na autenticação
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!mounted) return;
+
+      console.log("[Auth] Mudança no estado de autenticação:", event);
+      
+      try {
+        if (session?.user) {
+          console.log("[Auth] Novo usuário autenticado, atualizando perfil...");
+          await fetchUser(session.user.id);
+        } else {
+          console.log("[Auth] Usuário desconectado");
+          setUser(null);
+        }
+      } catch (error) {
+        console.error("[Auth] Erro ao atualizar usuário:", error);
+        setUser(null);
+      }
+    });
+
+    // Inicializar autenticação
+    initializeAuth();
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
 
   return (
     <AuthContext.Provider value={{ user, loading }}>
