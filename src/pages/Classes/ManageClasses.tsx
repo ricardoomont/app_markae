@@ -205,11 +205,6 @@ const ManageClasses = () => {
         
       if (error) throw error;
     },
-    onSuccess: () => {
-      toast.success("Aula excluída com sucesso!");
-      setDeletingClass(null);
-      queryClient.invalidateQueries({ queryKey: ["classes"] });
-    },
     onError: (error) => {
       toast.error(`Erro ao excluir aula: ${error.message}`);
     },
@@ -331,17 +326,30 @@ const ManageClasses = () => {
                             "w-full justify-start text-left font-normal",
                             !date && "text-muted-foreground"
                           )}
+                          type="button"
                         >
                           <CalendarIcon className="mr-2 h-4 w-4" />
                           {date ? format(date, "dd/MM/yyyy") : <span>Selecione uma data</span>}
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0">
+                      <PopoverContent className="w-auto p-0" align="start">
                         <Calendar
                           mode="single"
                           selected={date}
-                          onSelect={handleDateChange}
+                          onSelect={(selectedDate) => {
+                            // Pequeno atraso para evitar problemas com eventos touch em dispositivos móveis
+                            setTimeout(() => {
+                              setDate(selectedDate);
+                              if (selectedDate) {
+                                setNewClass({
+                                  ...newClass,
+                                  date: format(selectedDate, "yyyy-MM-dd"),
+                                });
+                              }
+                            }, 10);
+                          }}
                           initialFocus
+                          disabled={(date) => date < new Date("1900-01-01")} // Evitar datas muito antigas que podem causar problemas
                         />
                       </PopoverContent>
                     </Popover>
@@ -567,7 +575,18 @@ const ManageClasses = () => {
       )}
 
       {/* Dialog de Edição */}
-      <Dialog open={!!editingClass} onOpenChange={(open) => !open && setEditingClass(null)}>
+      <Dialog 
+        open={!!editingClass} 
+        onOpenChange={(open) => {
+          // Se estiver fechando o diálogo
+          if (!open) {
+            // Pequeno atraso antes de limpar o estado para evitar problemas de DOM no mobile
+            setTimeout(() => {
+              setEditingClass(null);
+            }, 50);
+          }
+        }}
+      >
         <DialogContent className="sm:max-w-[550px]">
           <form onSubmit={(e) => {
             e.preventDefault();
@@ -579,11 +598,17 @@ const ManageClasses = () => {
               updateMutation.mutate(editingClass, {
                 onSuccess: () => {
                   toast.success("Aula atualizada com sucesso!");
-                  // Atraso de 100ms para garantir que a atualização do estado tenha tempo de concluir
+                  // Atraso maior para garantir que a atualização do estado tenha tempo de concluir
+                  // e evitar problemas de DOM no mobile
                   setTimeout(() => {
-                    setEditingClass(null);
+                    // Primeiro, invalidamos os dados
                     queryClient.invalidateQueries({ queryKey: ["classes"] });
-                  }, 100);
+                    
+                    // Depois, com um pequeno atraso adicional, fechamos o modal
+                    setTimeout(() => {
+                      setEditingClass(null);
+                    }, 100);
+                  }, 200);
                 },
                 onError: (error) => {
                   toast.error(`Erro ao atualizar aula: ${error.message}`);
@@ -614,26 +639,31 @@ const ManageClasses = () => {
                           "w-full justify-start text-left font-normal",
                           !date && "text-muted-foreground"
                         )}
+                        type="button"
                       >
                         <CalendarIcon className="mr-2 h-4 w-4" />
                         {date ? format(date, "dd/MM/yyyy") : <span>Selecione uma data</span>}
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <Calendar
-                        mode="single"
-                        selected={date}
-                        onSelect={(selectedDate) => {
-                          setDate(selectedDate);
-                          if (selectedDate && editingClass) {
-                            setEditingClass({
-                              ...editingClass,
-                              date: format(selectedDate, "yyyy-MM-dd"),
-                            });
-                          }
-                        }}
-                        initialFocus
-                      />
+                    <PopoverContent className="w-auto p-0" align="start">
+                                              <Calendar
+                          mode="single"
+                          selected={date}
+                          onSelect={(selectedDate) => {
+                            // Pequeno atraso para evitar problemas com eventos touch em dispositivos móveis
+                            setTimeout(() => {
+                              setDate(selectedDate);
+                              if (selectedDate && editingClass) {
+                                setEditingClass({
+                                  ...editingClass,
+                                  date: format(selectedDate, "yyyy-MM-dd"),
+                                });
+                              }
+                            }, 10);
+                          }}
+                          initialFocus
+                          disabled={(date) => date < new Date("1900-01-01")} // Evitar datas muito antigas que podem causar problemas
+                        />
                     </PopoverContent>
                   </Popover>
                 </div>
@@ -734,7 +764,18 @@ const ManageClasses = () => {
       </Dialog>
 
       {/* Dialog de Confirmação de Exclusão */}
-      <AlertDialog open={!!deletingClass} onOpenChange={(open) => !open && setDeletingClass(null)}>
+      <AlertDialog 
+        open={!!deletingClass} 
+        onOpenChange={(open) => {
+          // Se estiver fechando o diálogo
+          if (!open) {
+            // Pequeno atraso antes de limpar o estado para evitar problemas de DOM no mobile
+            setTimeout(() => {
+              setDeletingClass(null);
+            }, 50);
+          }
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Você tem certeza?</AlertDialogTitle>
@@ -744,9 +785,26 @@ const ManageClasses = () => {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel type="button">Cancelar</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => deletingClass && deleteMutation.mutate(deletingClass.id)}
+              type="button"
+              onClick={() => {
+                if (deletingClass) {
+                  // Usar timeout para evitar problemas de DOM no mobile
+                  setTimeout(() => {
+                    deleteMutation.mutate(deletingClass.id, {
+                      onSuccess: () => {
+                        toast.success("Aula excluída com sucesso!");
+                        // Atraso para garantir que a UI tenha tempo de atualizar
+                        setTimeout(() => {
+                          setDeletingClass(null);
+                          queryClient.invalidateQueries({ queryKey: ["classes"] });
+                        }, 100);
+                      }
+                    });
+                  }, 10);
+                }
+              }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {deleteMutation.isPending ? "Excluindo..." : "Excluir"}
