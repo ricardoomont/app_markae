@@ -122,13 +122,22 @@ const ManageUsers = () => {
   // Criar usuário
   const createUserMutation = useMutation({
     mutationFn: async (data: typeof newUser) => {
-      if (!institution?.settings?.defaultTemporaryPassword) {
+      console.log("Iniciando createUserMutation com dados:", data);
+
+      if (!institution?.settings?.default_temporary_password) {
+        console.error("Senha temporária não configurada:", {
+          institution,
+          settings: institution?.settings,
+        });
         throw new Error("Configure uma senha temporária padrão nas configurações da instituição antes de criar novos usuários.");
       }
 
+      console.log("Senha temporária encontrada:", institution.settings.default_temporary_password);
+      
+      console.log("Chamando supabaseAdmin.auth.admin.createUser");
       const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
         email: data.email,
-        password: institution.settings.defaultTemporaryPassword,
+        password: institution.settings.default_temporary_password,
         email_confirm: true,
         user_metadata: {
           name: data.name,
@@ -137,10 +146,14 @@ const ManageUsers = () => {
       });
 
       if (authError) {
+        console.error("Erro ao criar usuário no Auth:", authError);
         throw authError;
       }
 
+      console.log("Usuário criado no Auth com sucesso:", authData);
+      
       // Usar supabaseAdmin para ignorar as políticas RLS
+      console.log("Criando perfil do usuário na tabela profiles");
       const { error: profileError } = await supabaseAdmin
         .from('profiles')
         .upsert({
@@ -153,9 +166,11 @@ const ManageUsers = () => {
         });
 
       if (profileError) {
+        console.error("Erro ao criar perfil:", profileError);
         throw profileError;
       }
 
+      console.log("Perfil do usuário criado com sucesso");
       return authData;
     },
     onSuccess: () => {
@@ -177,25 +192,50 @@ const ManageUsers = () => {
   // Atualizar usuário
   const updateUserMutation = useMutation({
     mutationFn: async (data: any) => {
-      const { error } = await supabase
+      console.log("Iniciando atualização do usuário com dados:", data);
+
+      // Atualizar o perfil do usuário usando supabaseAdmin para ignorar RLS
+      const { data: updatedData, error: profileError } = await supabaseAdmin
         .from("profiles")
         .update({
           name: data.name,
           role: data.role,
           active: data.active,
         })
-        .eq("id", data.id);
+        .eq("id", data.id)
+        .select();
         
-      if (error) throw error;
+      if (profileError) {
+        console.error("Erro ao atualizar perfil:", profileError);
+        throw profileError;
+      }
+
+      // Atualizar os metadados do usuário no Auth
+      const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(
+        data.id,
+        {
+          user_metadata: {
+            name: data.name,
+            role: data.role,
+          }
+        }
+      );
+
+      if (authError) {
+        console.error("Erro ao atualizar metadados do usuário:", authError);
+        throw authError;
+      }
       
-      return data;
+      console.log("Usuário atualizado com sucesso:", updatedData);
+      return updatedData;
     },
     onSuccess: () => {
       toast.success("Usuário atualizado com sucesso!");
       setEditingUser(null);
       queryClient.invalidateQueries({ queryKey: ["users", institutionId] });
     },
-    onError: (error) => {
+    onError: (error: any) => {
+      console.error("Erro completo ao atualizar usuário:", error);
       toast.error(`Erro ao atualizar usuário: ${error.message}`);
     },
   });
@@ -226,19 +266,32 @@ const ManageUsers = () => {
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
+    console.log("Função handleCreate executada");
+    
     if (!newUser.name || !newUser.role) {
       toast.error("Preencha todos os campos obrigatórios");
       return;
     }
+    
+    console.log("Verificando institution e senha temporária:", {
+      institution: institution,
+      hasSettings: !!institution?.settings,
+      defaultTempPassword: institution?.settings?.default_temporary_password,
+    });
+    
     createUserMutation.mutate(newUser);
   };
 
   const handleUpdate = (e: React.FormEvent) => {
     e.preventDefault();
+    console.log("Função handleUpdate executada");
+    
     if (!editingUser?.name || !editingUser?.role) {
       toast.error("Preencha todos os campos obrigatórios");
       return;
     }
+    
+    console.log("Dados do usuário para atualização:", editingUser);
     updateUserMutation.mutate(editingUser);
   };
 
@@ -276,7 +329,10 @@ const ManageUsers = () => {
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[425px]">
-            <form onSubmit={handleCreate}>
+            <form onSubmit={(e) => {
+              console.log("Formulário submetido!");
+              handleCreate(e);
+            }}>
               <DialogHeader>
                 <DialogTitle>Adicionar Usuário</DialogTitle>
                 <DialogDescription>
@@ -341,7 +397,18 @@ const ManageUsers = () => {
                 </div>
               </div>
               <DialogFooter>
-                <Button type="submit" disabled={createUserMutation.isPending}>
+                <Button 
+                  type="submit" 
+                  disabled={createUserMutation.isPending}
+                  onClick={(e) => {
+                    console.log("Botão de criação clicado!");
+                    if (!createUserMutation.isPending) {
+                      // O evento de submit do formulário já deveria lidar com isso,
+                      // mas vamos garantir com uma chamada extra
+                      // e.preventDefault(); - Não prevenir o padrão aqui para permitir o submit do form
+                    }
+                  }}
+                >
                   {createUserMutation.isPending ? "Criando..." : "Criar"}
                 </Button>
               </DialogFooter>
@@ -459,7 +526,10 @@ const ManageUsers = () => {
       {editingUser && (
         <Dialog open={!!editingUser} onOpenChange={(open) => !open && setEditingUser(null)}>
           <DialogContent>
-            <form onSubmit={handleUpdate}>
+            <form onSubmit={(e) => {
+              console.log("Formulário de edição submetido!");
+              handleUpdate(e);
+            }}>
               <DialogHeader>
                 <DialogTitle>Editar Usuário</DialogTitle>
                 <DialogDescription>
@@ -502,7 +572,14 @@ const ManageUsers = () => {
                 </div>
               </div>
               <DialogFooter>
-                <Button type="submit" disabled={updateUserMutation.isPending}>
+                <Button 
+                  type="submit" 
+                  disabled={updateUserMutation.isPending}
+                  onClick={(e) => {
+                    console.log("Botão Salvar Alterações clicado!");
+                    // Não prevenir o evento padrão para que o formulário seja submetido normalmente
+                  }}
+                >
                   {updateUserMutation.isPending ? "Salvando..." : "Salvar Alterações"}
                 </Button>
               </DialogFooter>

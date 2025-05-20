@@ -365,13 +365,17 @@ const InstitutionSettings = () => {
   };
 
   const updateClassTimeField = (id: string, field: string, value: any) => {
-    setLocalClassTimes(prev => 
-      prev.map(ct => 
+    if (!id || !field) return;
+    
+    setLocalClassTimes(prev => {
+      if (!prev || !Array.isArray(prev)) return [];
+      
+      return prev.map(ct => 
         ct.id === id 
           ? { ...ct, [field]: value }
           : ct
-      )
-    );
+      );
+    });
   };
 
   const saveClassTimeChanges = (classTime: ClassTimeType) => {
@@ -403,8 +407,15 @@ const InstitutionSettings = () => {
   const handleDayToggleForClassTime = (classTime: ClassTimeType, day: number) => {
     let newDays;
     
-    if (classTime.daysOfWeek.includes(day)) {
+    // Verificar se daysOfWeek existe e é um array
+    if (!classTime.daysOfWeek || !Array.isArray(classTime.daysOfWeek)) {
+      newDays = [day]; // Se não existir, criar um novo array com apenas este dia
+    } else if (classTime.daysOfWeek.includes(day)) {
       newDays = classTime.daysOfWeek.filter(d => d !== day);
+      // Garantir que temos pelo menos um dia selecionado
+      if (newDays.length === 0) {
+        newDays = [day];
+      }
     } else {
       newDays = [...classTime.daysOfWeek, day];
     }
@@ -551,16 +562,17 @@ const InstitutionSettings = () => {
           <div className="space-y-2">
             <Label>Método de Validação de Presença</Label>
             <RadioGroup
-              value={institutionData.settings.attendance_validation_method}
-              onValueChange={(value) =>
+              value={institutionData?.settings?.attendance_validation_method || 'qrcode'}
+              onValueChange={(value) => {
+                if (!institutionData) return;
                 setInstitutionData({
                   ...institutionData,
                   settings: {
                     ...institutionData.settings,
                     attendance_validation_method: value as 'qrcode' | 'geolocation' | 'code' | 'manual',
                   },
-                })
-              }
+                });
+              }}
               className="flex flex-col space-y-2"
             >
               <div className="flex items-center space-x-2">
@@ -580,16 +592,17 @@ const InstitutionSettings = () => {
               type="number"
               min="0"
               max="60"
-              value={institutionData.settings.attendance_window_minutes}
-              onChange={(e) =>
+              value={institutionData?.settings?.attendance_window_minutes || 15}
+              onChange={(e) => {
+                if (!institutionData) return;
                 setInstitutionData({
                   ...institutionData,
                   settings: {
                     ...institutionData.settings,
                     attendance_window_minutes: parseInt(e.target.value) || 0,
                   },
-                })
-              }
+                });
+              }}
             />
             <p className="text-sm text-muted-foreground">
               Tempo de tolerância para o aluno confirmar presença após o início da aula.
@@ -795,7 +808,7 @@ const InstitutionSettings = () => {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {localClassTimes.length > 0 ? (
+          {localClassTimes && localClassTimes.length > 0 ? (
             <div className="space-y-4">
               {localClassTimes.map((classTime) => (
                 <div
@@ -809,7 +822,7 @@ const InstitutionSettings = () => {
                           <Label htmlFor={`name-${classTime.id}`}>Nome</Label>
                           <Input
                             id={`name-${classTime.id}`}
-                            value={classTime.name}
+                            value={classTime.name || ''}
                             onChange={(e) => updateClassTimeField(classTime.id, 'name', e.target.value)}
                           />
                         </div>
@@ -822,7 +835,7 @@ const InstitutionSettings = () => {
                                 type="button"
                                 size="sm"
                                 variant={
-                                  classTime.daysOfWeek?.includes(day)
+                                  (classTime.daysOfWeek && classTime.daysOfWeek.includes(day))
                                     ? "default"
                                     : "outline"
                                 }
@@ -839,7 +852,7 @@ const InstitutionSettings = () => {
                           <Input
                             id={`startTime-${classTime.id}`}
                             type="time"
-                            value={classTime.startTime}
+                            value={classTime.startTime || ''}
                             onChange={(e) => updateClassTimeField(classTime.id, 'startTime', e.target.value)}
                           />
                         </div>
@@ -848,7 +861,7 @@ const InstitutionSettings = () => {
                           <Input
                             id={`endTime-${classTime.id}`}
                             type="time"
-                            value={classTime.endTime}
+                            value={classTime.endTime || ''}
                             onChange={(e) => updateClassTimeField(classTime.id, 'endTime', e.target.value)}
                           />
                         </div>
@@ -874,19 +887,21 @@ const InstitutionSettings = () => {
                   ) : (
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="font-medium">{classTime.name}</p>
+                        <p className="font-medium">{classTime.name || ''}</p>
                         <div className="flex items-center text-sm text-muted-foreground">
                           <Clock className="h-3 w-3 mr-1" />
                           <span>
-                            {classTime.startTime} - {classTime.endTime}
+                            {classTime.startTime || '--:--'} - {classTime.endTime || '--:--'}
                           </span>
                         </div>
                         <div className="flex flex-wrap gap-1 mt-1">
-                          {classTime.daysOfWeek.map((day) => (
+                          {classTime.daysOfWeek && Array.isArray(classTime.daysOfWeek) ? classTime.daysOfWeek.map((day) => (
                             <Badge key={day} variant="outline">
                               {getDayName(day)}
                             </Badge>
-                          ))}
+                          )) : (
+                            <Badge variant="outline">Sem dias definidos</Badge>
+                          )}
                         </div>
                       </div>
                       <div className="flex space-x-1">
@@ -942,7 +957,7 @@ const InstitutionSettings = () => {
                       type="button"
                       size="sm"
                       variant={
-                        newClassTime.daysOfWeek?.includes(day)
+                        (newClassTime.daysOfWeek && newClassTime.daysOfWeek.includes(day))
                           ? "default"
                           : "outline"
                       }

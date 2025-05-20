@@ -48,6 +48,7 @@ interface InstitutionSettings {
   institution_id: string;
   primary_color: string;
   updated_at: string;
+  default_temporary_password?: string;
   latitude: number;
   longitude: number;
   geolocation_radius: number;
@@ -143,6 +144,8 @@ export function useActiveInstitution() {
           email
         };
 
+        console.log("Dados originais do settings:", settingsData);
+
         const settings: InstitutionSettings = {
           attendance_validation_method: (settingsData.attendance_validation_method || 'qrcode') as ValidationMethod,
           attendance_window_minutes: settingsData.attendance_window_minutes || 15,
@@ -151,6 +154,7 @@ export function useActiveInstitution() {
           institution_id: settingsData.institution_id,
           primary_color: settingsData.primary_color,
           updated_at: settingsData.updated_at,
+          default_temporary_password: settingsData.default_temporary_password,
           geolocation_radius: settingsData.geolocation_radius || 100,
           latitude: Number(settingsData.latitude || 0),
           longitude: Number(settingsData.longitude || 0),
@@ -162,6 +166,9 @@ export function useActiveInstitution() {
             daysOfWeek: ct.days_of_week.map(Number)
           }))
         };
+
+        console.log("Settings após formatação:", settings);
+        console.log("Senha temporária:", settings.default_temporary_password);
 
         const institution: Institution = {
           id: institutionData.id,

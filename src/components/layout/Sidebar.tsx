@@ -85,7 +85,7 @@ export function AppSidebar() {
                   </NavItem>
                 ) : (
                   <NavItem icon={CheckSquare} to="/attendance" onNavigate={() => setIsOpen(false)}>
-                    Presenças
+                    Relatórios
                   </NavItem>
                 )}
                 
@@ -161,7 +161,7 @@ export function AppSidebar() {
             </NavItem>
           ) : (
             <NavItem icon={CheckSquare} to="/attendance">
-              Presenças
+              Relatórios
             </NavItem>
           )}
           
