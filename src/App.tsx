@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Layout } from "./components/layout/Layout";
 import { AuthProvider, useSupabaseAuth } from "./hooks/useSupabaseAuth";
+import ErrorBoundary from "./components/ErrorBoundary";
 import Login from "./pages/Login";
 import ResetPassword from "./pages/ResetPassword";
 import Profile from "./pages/Profile";
@@ -46,40 +47,42 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 
 // Auth wrapper to provide context
 const AuthWrapper = () => (
-  <Routes>
-    {/* Rotas públicas */}
-    <Route path="/login" element={<Login />} />
-    <Route path="/reset-password" element={<ResetPassword />} />
-    <Route path="/first-access" element={<ProtectedFirstAccessRoute />} />
-    
-    {/* Rotas protegidas dentro do Layout */}
-    <Route path="/" element={
-      <ProtectedRoute>
-        <Layout />
-      </ProtectedRoute>
-    }>
-      <Route index element={<Navigate to="/dashboard" replace />} />
-      <Route path="dashboard" element={<Dashboard />} />
-      <Route path="profile" element={<Profile />} />
+  <ErrorBoundary>
+    <Routes>
+      {/* Rotas públicas */}
+      <Route path="/login" element={<Login />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
+      <Route path="/first-access" element={<ProtectedFirstAccessRoute />} />
       
-      {/* Rotas de presença */}
-      <Route path="attendance">
-        <Route index element={<AttendanceReport />} />
-        <Route path="take" element={<TakeAttendance />} />
-        <Route path="take/:classId" element={<TakeAttendance />} />
-        <Route path="confirm" element={<ConfirmAttendance />} />
-        <Route path="confirm/:classId" element={<ConfirmAttendance />} />
-        <Route path=":classId" element={<AttendanceReport />} />
+      {/* Rotas protegidas dentro do Layout */}
+      <Route path="/" element={
+        <ProtectedRoute>
+          <Layout />
+        </ProtectedRoute>
+      }>
+        <Route index element={<Navigate to="/dashboard" replace />} />
+        <Route path="dashboard" element={<Dashboard />} />
+        <Route path="profile" element={<Profile />} />
+        
+        {/* Rotas de presença */}
+        <Route path="attendance">
+          <Route index element={<AttendanceReport />} />
+          <Route path="take" element={<TakeAttendance />} />
+          <Route path="take/:classId" element={<TakeAttendance />} />
+          <Route path="confirm" element={<ConfirmAttendance />} />
+          <Route path="confirm/:classId" element={<ConfirmAttendance />} />
+          <Route path=":classId" element={<AttendanceReport />} />
+        </Route>
+        
+        <Route path="users" element={<ManageUsers />} />
+        <Route path="subjects" element={<ManageSubjects />} />
+        <Route path="classes" element={<ManageClasses />} />
+        <Route path="settings" element={<InstitutionSettings />} />
+        
+        <Route path="*" element={<NotFound />} />
       </Route>
-      
-      <Route path="users" element={<ManageUsers />} />
-      <Route path="subjects" element={<ManageSubjects />} />
-      <Route path="classes" element={<ManageClasses />} />
-      <Route path="settings" element={<InstitutionSettings />} />
-      
-      <Route path="*" element={<NotFound />} />
-    </Route>
-  </Routes>
+    </Routes>
+  </ErrorBoundary>
 );
 
 const App = () => (
@@ -89,7 +92,9 @@ const App = () => (
         <Toaster />
         <Sonner />
         <AuthProvider>
-          <AuthWrapper />
+          <ErrorBoundary>
+            <AuthWrapper />
+          </ErrorBoundary>
         </AuthProvider>
       </TooltipProvider>
     </BrowserRouter>

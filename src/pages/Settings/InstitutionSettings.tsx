@@ -24,12 +24,17 @@ type ClassTimeType = {
   isEditing?: boolean;
 };
 
+interface CustomInstitutionSettings extends Omit<InstitutionSettings, 'created_at' | 'updated_at'> {
+  created_at?: string;
+  updated_at?: string;
+}
+
 interface InstitutionData {
   id: string;
   name: string;
   logo: string;
   active: boolean;
-  settings: InstitutionSettings;
+  settings: CustomInstitutionSettings;
 }
 
 const InstitutionSettings = () => {
@@ -65,6 +70,29 @@ const InstitutionSettings = () => {
     enabled: !!institutionId
   });
   
+  // Buscar configurações da instituição diretamente
+  const { data: directSettings, isLoading: isLoadingSettings } = useQuery({
+    queryKey: ['institution_settings_direct', institutionId],
+    queryFn: async () => {
+      if (!institutionId) return null;
+      
+      const { data, error } = await supabase
+        .from('institution_settings')
+        .select('*')
+        .eq('institution_id', institutionId)
+        .single();
+        
+      if (error) {
+        console.error('Erro ao buscar configurações diretamente:', error);
+        return null;
+      }
+      
+      console.log("Configurações buscadas diretamente:", data);
+      return data as any; // Usar 'as any' para evitar erros de tipagem
+    },
+    enabled: !!institutionId
+  });
+  
   const [institutionData, setInstitutionData] = useState<InstitutionData | null>(null);
   const [localClassTimes, setLocalClassTimes] = useState<ClassTimeType[]>([]);
   const [newClassTime, setNewClassTime] = useState<Partial<ClassTimeType>>({
@@ -74,6 +102,14 @@ const InstitutionSettings = () => {
     daysOfWeek: [4], // Default to Thursday
   });
   const [isSaving, setIsSaving] = useState(false);
+  const [temporaryPassword, setTemporaryPassword] = useState<string>("");
+
+  // Adicionar log para debug dos dados recebidos
+  useEffect(() => {
+    if (institution?.settings) {
+      console.log("Dados de configurações carregados:", institution.settings);
+    }
+  }, [institution]);
 
   // Inicializar dados quando o componente for carregado
   useEffect(() => {
@@ -97,6 +133,15 @@ const InstitutionSettings = () => {
       });
     }
   }, [institution]);
+
+  // Atualizar a senha temporária quando os dados diretos forem carregados
+  useEffect(() => {
+    if (directSettings) {
+      const password = (directSettings as any).default_temporary_password || "";
+      console.log("Senha temporária carregada do banco:", password);
+      setTemporaryPassword(password);
+    }
+  }, [directSettings]);
 
   // Atualizar os horários locais quando os dados são carregados
   useEffect(() => {
@@ -266,11 +311,29 @@ const InstitutionSettings = () => {
     if (!institutionData) return;
     setIsSaving(true);
 
-    updateInstitutionMutation.mutate(institutionData, {
-      onSettled: () => {
-        setIsSaving(false);
-      }
-    });
+    try {
+      updateInstitutionMutation.mutate(institutionData, {
+        onSuccess: () => {
+          setIsSaving(false);
+          toast.success("Configurações da instituição atualizadas com sucesso");
+          // Atraso pequeno para garantir que todas as atualizações do estado sejam aplicadas
+          setTimeout(() => {
+            queryClient.invalidateQueries({ queryKey: ['institution', institutionId] });
+          }, 100);
+        },
+        onError: (error) => {
+          setIsSaving(false);
+          toast.error(`Erro ao atualizar instituição: ${error.message}`);
+        },
+        onSettled: () => {
+          setIsSaving(false);
+        }
+      });
+    } catch (err) {
+      console.error("Erro ao salvar configurações:", err);
+      toast.error("Ocorreu um erro ao salvar. Por favor, tente novamente.");
+      setIsSaving(false);
+    }
   };
 
   const addClassTime = () => {
@@ -354,7 +417,7 @@ const InstitutionSettings = () => {
     return days[day];
   };
 
-  const isLoading = isLoadingInstitutionHook || isLoadingClassTimes;
+  const isLoading = isLoadingInstitutionHook || isLoadingClassTimes || isLoadingSettings;
 
   if (isLoadingInstitutionHook) {
     return (
@@ -665,18 +728,18 @@ const InstitutionSettings = () => {
             <Input
               id="defaultPassword"
               type="text"
-              value={institutionData.settings.default_temporary_password || ''}
-              onChange={(e) =>
-                setInstitutionData({
-                  ...institutionData,
-                  settings: {
-                    ...institutionData.settings,
-                    default_temporary_password: e.target.value,
-                  },
-                })
-              }
+              value={temporaryPassword}
+              onChange={(e) => {
+                console.log("Novo valor da senha temporária:", e.target.value);
+                setTemporaryPassword(e.target.value);
+              }}
               placeholder="Digite a senha temporária padrão"
             />
+            <p className="text-sm text-gray-500 mt-1">
+              {directSettings ? 
+                `Valor atual no banco: "${(directSettings as any).default_temporary_password || '(vazio)'}"` : 
+                "Carregando valor do banco..."}
+            </p>
             <p className="text-sm text-muted-foreground">
               Esta senha será usada como padrão para todos os novos usuários criados.
               Eles poderão alterá-la no primeiro acesso.
@@ -684,16 +747,37 @@ const InstitutionSettings = () => {
           </div>
           <Button 
             onClick={() => {
-              setIsSaving(true);
-              updateInstitutionMutation.mutate(
-                {
-                  ...institutionData,
-                  settings: institutionData.settings
-                },
-                {
-                  onSettled: () => setIsSaving(false)
-                }
-              );
+              try {
+                setIsSaving(true);
+                
+                // Usar o estado temporaryPassword
+                const passwordToSave = temporaryPassword;
+                
+                console.log("Salvando senha temporária:", passwordToSave);
+                
+                updateInstitutionMutation.mutate(
+                  {
+                    ...institutionData,
+                    settings: {
+                      ...institutionData.settings,
+                      default_temporary_password: passwordToSave
+                    }
+                  },
+                  {
+                    onSuccess: () => {
+                      toast.success("Configurações de usuários salvas com sucesso");
+                      setTimeout(() => {
+                        queryClient.invalidateQueries({ queryKey: ['institution_settings_direct', institutionId] });
+                      }, 100);
+                    },
+                    onSettled: () => setIsSaving(false)
+                  }
+                );
+              } catch (err) {
+                console.error("Erro ao salvar configurações de usuários:", err);
+                toast.error("Ocorreu um erro ao salvar. Por favor, tente novamente.");
+                setIsSaving(false);
+              }
             }} 
             disabled={isSaving}
             className="w-full"

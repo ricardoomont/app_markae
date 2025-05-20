@@ -230,15 +230,7 @@ const ManageClasses = () => {
         .eq("id", data.id);
         
       if (error) throw error;
-    },
-    onSuccess: () => {
-      toast.success("Aula atualizada com sucesso!");
-      setEditingClass(null);
-      queryClient.invalidateQueries({ queryKey: ["classes"] });
-    },
-    onError: (error) => {
-      toast.error(`Erro ao atualizar aula: ${error.message}`);
-    },
+    }
   });
 
   // Criar aula
@@ -583,7 +575,24 @@ const ManageClasses = () => {
               toast.error("Preencha todos os campos obrigatórios");
               return;
             }
-            updateMutation.mutate(editingClass);
+            try {
+              updateMutation.mutate(editingClass, {
+                onSuccess: () => {
+                  toast.success("Aula atualizada com sucesso!");
+                  // Atraso de 100ms para garantir que a atualização do estado tenha tempo de concluir
+                  setTimeout(() => {
+                    setEditingClass(null);
+                    queryClient.invalidateQueries({ queryKey: ["classes"] });
+                  }, 100);
+                },
+                onError: (error) => {
+                  toast.error(`Erro ao atualizar aula: ${error.message}`);
+                }
+              });
+            } catch (err) {
+              console.error("Erro ao atualizar aula:", err);
+              toast.error("Ocorreu um erro ao salvar. Por favor, tente novamente.");
+            }
           }}>
             <DialogHeader>
               <DialogTitle>Editar Aula</DialogTitle>
